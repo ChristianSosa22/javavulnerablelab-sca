@@ -60,3 +60,15 @@ cambio aplicado:
 | log4j-core | 9 | 4 (CVE-2025-68161, CVE-2026-34477, CVE-2026-34479, CVE-2026-34480) |
 | log4j-api | 3 | 2 (CVE-2026-34477, CVE-2026-34479) |
 | CVE-2021-44228 (Log4Shell) | Sí | **No** |
+
+## Resultado en Code scanning
+
+| | Antes | Después |
+| --- | --- | --- |
+| Alertas abiertas | 31 | **25** |
+| Alertas cerradas (*Fixed*) | 0 | **12** |
+
+GitHub identifica cada alerta por CVE **y ubicación** (el JAR). Se cierran las
+12 alertas de `log4j-*-2.12.1.jar`, incluida **CVE-2021-44228**, y se abren 6
+en `log4j-*-2.12.4.jar` para los 4 CVE sin corrección en Java 7:
+31 − 12 + 6 = 25.
