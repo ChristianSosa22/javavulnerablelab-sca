@@ -1,3 +1,8 @@
+> **Laboratorio SCA (Dependency-Check, CycloneDX, Dependency-Track, DefectDojo).**
+> Este repositorio es una copia de JavaVulnerableLab usada para análisis de
+> composición de software. El entorno de trabajo con Docker está en
+> [docs/ENTORNO.md](docs/ENTORNO.md).
+
 Java Vulnerable Lab
 ===================
 
