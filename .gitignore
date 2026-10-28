@@ -6,3 +6,13 @@ target/
 *.iml
 .vscode/
 .DS_Store
+
+# --- Laboratorio SCA ---
+# Salidas de Maven (incluye dependency-check-report.* y bom.json generados)
+target/
+# Carpetas de reportes locales (Dependency-Check, SBOM, exportes de DefectDojo/Dependency-Track)
+reports/
+dependency-check-report.*
+odc-reports/
+# Secretos locales: aquí vive NVD_API_KEY, nunca se sube al repositorio
+.env
