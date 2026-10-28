@@ -1,0 +1,153 @@
+# Entorno de desarrollo del laboratorio SCA.
+# Todo corre en contenedores: no hace falta instalar Java, Maven,
+# Dependency-Track ni DefectDojo en la máquina.
+#
+# Cada herramienta tiene su perfil para no levantar todo a la vez
+# (Dependency-Track necesita ~4 GB de RAM y DefectDojo ~2 GB):
+#
+#   docker compose -f docker-compose.sca.yml run --rm dependency-check   # Parte B
+#   docker compose -f docker-compose.sca.yml run --rm sbom               # Parte C
+#   docker compose -f docker-compose.sca.yml --profile dtrack up -d      # Parte C (http://localhost:8080)
+#   docker compose -f docker-compose.sca.yml --profile defectdojo up -d  # Parte D (http://localhost:8082)
+#
+# La clave del NVD se lee de .env (NVD_API_KEY=...), que está en .gitignore.
+
+name: sca-lab
+
+x-maven: &maven
+  image: maven:3.9-eclipse-temurin-17
+  working_dir: /src
+  volumes:
+    - .:/src
+    # Repositorio local de Maven persistente: aquí queda la base del NVD
+    # (org/owasp/dependency-check-data), así solo se descarga completa una vez.
+    - m2:/root/.m2
+  env_file:
+    - path: .env
+      required: false
+  profiles: [tools]
+
+x-dojo-env: &dojo-env
+  DD_DATABASE_URL: postgresql://defectdojo:defectdojo@postgres:5432/defectdojo
+  DD_CELERY_BROKER_URL: redis://valkey:6379/0
+  DD_CACHE_URL: redis://valkey:6379/1
+  DD_SECRET_KEY: lab-only-secret-key-not-for-production
+  DD_CREDENTIAL_AES_256_KEY: "lab-only-aes-key-32-characters!!"
+  DD_DATABASE_READINESS_TIMEOUT: "60"
+
+x-dojo-app: &dojo-app
+  image: docker.io/defectdojo/defectdojo-django:3.4.300
+  profiles: [defectdojo]
+  depends_on:
+    initializer:
+      condition: service_completed_successfully
+    postgres:
+      condition: service_started
+    valkey:
+      condition: service_started
+
+services:
+  # --- Herramientas (Java 17 + Maven 3.9) ---
+  maven:
+    <<: *maven
+
+  dependency-check:
+    <<: *maven
+    command:
+      - mvn
+      - -B
+      - org.owasp:dependency-check-maven:13.0.0:check
+      - -Dformat=ALL
+      - -DnvdApiKeyEnvironmentVariable=NVD_API_KEY
+      - -DossindexAnalyzerEnabled=false
+
+  sbom:
+    <<: *maven
+    command:
+      - mvn
+      - -B
+      - org.cyclonedx:cyclonedx-maven-plugin:2.9.3:makeAggregateBom
+      - -DoutputFormat=json
+      - -DoutputName=bom
+
+  # --- Dependency-Track (frontend + API en un solo contenedor) ---
+  dtrack:
+    image: dependencytrack/bundled:4.14.6
+    profiles: [dtrack]
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - dtrack-data:/data
+    restart: unless-stopped
+
+  # --- DefectDojo ---
+  nginx:
+    image: docker.io/defectdojo/defectdojo-nginx:3.4.300
+    profiles: [defectdojo]
+    depends_on:
+      - uwsgi
+    environment:
+      DD_UWSGI_HOST: uwsgi
+      DD_UWSGI_PORT: "3031"
+    volumes:
+      - dojo-media:/usr/share/nginx/html/media
+    ports:
+      - "127.0.0.1:8082:8080"
+
+  uwsgi:
+    <<: *dojo-app
+    entrypoint: ["/wait-for-it.sh", "postgres:5432", "-t", "30", "--", "/entrypoint-uwsgi.sh"]
+    environment:
+      <<: *dojo-env
+      DD_DEBUG: "False"
+      DD_ALLOWED_HOSTS: "*"
+    volumes:
+      - dojo-media:/app/media
+
+  celerybeat:
+    <<: *dojo-app
+    entrypoint: ["/wait-for-it.sh", "postgres:5432", "-t", "30", "--", "/entrypoint-celery-beat.sh"]
+    environment: *dojo-env
+
+  celeryworker:
+    <<: *dojo-app
+    entrypoint: ["/wait-for-it.sh", "postgres:5432", "-t", "30", "--", "/entrypoint-celery-worker.sh"]
+    environment: *dojo-env
+    volumes:
+      - dojo-media:/app/media
+
+  initializer:
+    image: docker.io/defectdojo/defectdojo-django:3.4.300
+    profiles: [defectdojo]
+    depends_on:
+      - postgres
+    entrypoint: ["/wait-for-it.sh", "postgres:5432", "--", "/entrypoint-initializer.sh"]
+    environment:
+      <<: *dojo-env
+      DD_ADMIN_USER: admin
+      DD_ADMIN_MAIL: admin@defectdojo.local
+      DD_ADMIN_PASSWORD: ${DD_ADMIN_PASSWORD:-SCA-lab-2026!}
+      DD_INITIALIZE: "true"
+
+  postgres:
+    image: postgres:18.6-alpine
+    profiles: [defectdojo]
+    environment:
+      POSTGRES_DB: defectdojo
+      POSTGRES_USER: defectdojo
+      POSTGRES_PASSWORD: defectdojo
+    volumes:
+      - dojo-postgres:/var/lib/postgresql
+
+  valkey:
+    image: valkey/valkey:9.1.2-alpine
+    profiles: [defectdojo]
+    volumes:
+      - dojo-valkey:/data
+
+volumes:
+  m2:
+  dtrack-data:
+  dojo-media:
+  dojo-postgres:
+  dojo-valkey:
