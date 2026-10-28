@@ -16,3 +16,6 @@ dependency-check-report.*
 odc-reports/
 # Secretos locales: aquí vive NVD_API_KEY, nunca se sube al repositorio
 .env
+# Excepción: copias entregables del laboratorio
+!entregables/
+!entregables/**
