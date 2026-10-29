@@ -2,7 +2,7 @@
 
 **Curso:** PDDS — Trimestre 4 · **Universidad Galileo**
 
-**Estudiante:** ______________________ · **Carné:** ____________
+**Estudiante:** Christian Sosa · **Carné:** 22000102
 
 **Fecha:** 28 de octubre de 2026
 
